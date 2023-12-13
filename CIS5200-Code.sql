@@ -1,4 +1,10 @@
--- Create a Hive table for anime_ratings
+--Importing the csv file to the hive---
+
+scp C:/Users/anataka2/Downloads/Anime_dataset/final_animedataset.csv anataka2@129.153.66.218:/home/anataka2
+
+
+-- Create an intial Hive table for Descriptive/Temporory analysis---
+
 CREATE TABLE IF NOT EXISTS anime_ratings (
     username STRING,
     anime_id INT,
@@ -24,8 +30,11 @@ LOCATION '/user/anataka2/TermProject/'
 TBLPROPERTIES ('skip.header.line.count'='1');
 
 
+--Importing the csv file to the hive---
 
 scp C:/Users/anataka2/Downloads/Anime_dataset/users-details-2023.csv anataka2@129.153.66.218:/home/anataka2
+
+---Creating a new table for Descriptive/Temporory analysis---
 
 CREATE TABLE IF NOT EXISTS anime_user_data (
     Mal_ID INT,
@@ -55,10 +64,14 @@ STORED AS TEXTFILE
 LOCATION '/user/anataka2/TermProject/'
 TBLPROPERTIES ('skip.header.line.count'='1');
 
-SELECT Username,Gender,Birthday,Location FROM anime_user_data WHERE Days_Watched > 100 ORDER BY Days_Watched DESC LIMIT 20;
+---Query---
+SELECT Username,Gender,Birthday,Location
+FROM anime_user_data WHERE Days_Watched > 100 
+ORDER BY Days_Watched DESC
+LIMIT 20;
 
 
-Temporal Analysis:
+i)***Temporal Analysis***
 Query 1:
 
 1) Number of the users joined and count per month from 2004 TO 2010
@@ -77,7 +90,7 @@ ORDER BY
 
 
 
-2) Saving it to CSV file
+---Saving it to CSV file---
 INSERT OVERWRITE DIRECTORY '/user/anataka2/tmp/JoinedMonth/'
 ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
 SELECT
@@ -93,7 +106,7 @@ GROUP BY
 ORDER BY
     join_month;
 	
-3) Download the query to hive:
+---Download the file and then save it to local computer---
 hdfs dfs -cat tmp/JoinedMonth/000000_0 | tail -n 2
 hdfs dfs -ls ./tmp/JoinedMonth/
 hdfs dfs -get ./tmp/JoinedMonth/000000_0 JoinedMonth.csv
@@ -130,7 +143,7 @@ FROM (
 ORDER BY
     join_month;
 	
-2) Saving it to CSV file
+---Saving it to CSV file---
 INSERT OVERWRITE DIRECTORY '/user/anataka2/tmp/JoinedMonthPercentage/'
 ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
 SELECT
@@ -157,7 +170,7 @@ FROM (
 ORDER BY
     join_month;
 
-3) 3) Download the query to hive:
+---Downloading the file to the local computer---
 hdfs dfs -cat tmp/JoinedMonthPercentage/000000_0 | tail -n 2
 hdfs dfs -ls ./tmp/JoinedMonthPercentage/
 hdfs dfs -get ./tmp/JoinedMonthPercentage/000000_0 JoinedMonthPercentage.csv
@@ -165,7 +178,8 @@ tail -n 2 JoinedMonthPercentage.csv
 
 scp anataka2@129.153.66.218:/home/anataka2/JoinedMonthPercentage.csv .
 
-Query 3:
+
+---Import a new csv file to join the tables---
 
 scp C:/Users/anataka2/Downloads/Anime_dataset/anime-dataset-2023.csv anataka2@129.153.66.218:/home/anataka2
 
@@ -205,32 +219,12 @@ STORED AS TEXTFILE
 LOCATION '/user/anataka2/TermProject/'
 TBLPROPERTIES ('skip.header.line.count'='1');
 
-3) Query for 
-
-SELECT Name, score, CAST(SUBSTR(REGEXP_REPLACE(premiered, '[^0-9]', ''), 1,4) AS INT) as Year_Premiered FROM anime_dataset
-WHERE Premiered != "UNKNOWN"
-AND score != "UNKNOWN"
-AND CAST(SUBSTR(REGEXP_REPLACE(premiered, '[^0-9]', ''), 1,4) AS INT) IS NOT NULL 
-ORDER BY score desc
-LIMIT 10;
-
-SELECT
-    Location,
-    COUNT(Username) AS UserCount,
-    AVG(Days_Watched) AS AvgDaysWatched,
-    AVG(Mean_Score) AS AvgMeanScore
-FROM
-    anime_user_data
-WHERE
-    Location IS NOT NULL
-GROUP BY
-    Location
-ORDER BY
-    UserCount DESC;
-LIMIT 20;
 
 
-CREATE TABLE IF NOT EXISTS heat_map AS
+ii)***Spatial Analysis***
+---Creating a table for heatmap---
+
+CREATE TABLE IF NOT EXISTS joined_anime_data AS
 SELECT
     u.Mal_ID,
     u.Username,
@@ -247,18 +241,59 @@ SELECT
     u.Plan_to_Watch,
     u.Total_Entries,
     u.Rewatched,
-    u.Episodes_Watched,
-    d.Name,
-    d.Score,
-    d.Premiered,
-    d.Genre
+    u.Episodes_Watched
 FROM
     anime_user_data u
 JOIN
-    anime_dataset d
+    anime_ratings r
 ON
-    u.Mal_ID = d.Mal_ID
+    u.Username = r.Username
 WHERE
-    u.Mal_ID IS NOT NULL
-    AND d.Mal_ID IS NOT NULL
-    AND u.Location IS NOT NULL;
+    u.Username IS NOT NULL
+    AND r.Username IS NOT NULL;
+LIMIT 20;
+
+--This query sums the Episodes_Watched for each location--
+
+SELECT
+    Location,
+    SUM(Episodes_Watched) AS Total_Watched_Episodes
+FROM
+    joined_anime_data
+WHERE
+    Location IS NOT NULL
+    AND Episodes_Watched IS NOT NULL
+GROUP BY
+    Location
+ORDER BY
+    Total_Watched_Episodes DESC
+LIMIT 10;
+
+--saving it to csv format--
+
+INSERT OVERWRITE DIRECTORY '/user/anataka2/tmp/joined_anime_data/'
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
+SELECT
+    Location,
+    SUM(Episodes_Watched) AS Total_Watched_Episodes
+FROM
+    joined_anime_data
+WHERE
+    Location IS NOT NULL
+    AND Episodes_Watched IS NOT NULL
+GROUP BY
+    Location
+ORDER BY
+    Total_Watched_Episodes DESC
+LIMIT 10;
+
+--Downloading the csv file to hdsf, then to you local computer--
+hdfs dfs -cat tmp/joined_anime_data/000000_0 | tail -n 2
+hdfs dfs -ls ./tmp/joined_anime_data/
+hdfs dfs -get ./tmp/joined_anime_data/000000_0 joined_anime_data.csv
+tail -n 2 joined_anime_data.csv
+
+scp anataka2@129.153.66.218:/home/anataka2/joined_anime_data.csv .
+
+
+
