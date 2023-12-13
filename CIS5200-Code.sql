@@ -261,5 +261,4 @@ ON
 WHERE
     u.Mal_ID IS NOT NULL
     AND d.Mal_ID IS NOT NULL
-    AND u.Location IS NOT NULL
-    AND u.Joined BETWEEN '2005-01-01' AND '2010-12-31';
+    AND u.Location IS NOT NULL;
